@@ -202,8 +202,7 @@ def train(args, model):
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
             '''
-            else:
-                loss.backward()
+            loss.backward()
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 losses.update(loss.item()*args.gradient_accumulation_steps)
