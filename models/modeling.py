@@ -77,7 +77,7 @@ class Attention(nn.Module):
         self.query = Linear(config.hidden_size, self.all_head_size)
         self.key = Linear(config.hidden_size, self.all_head_size)
         self.value = Linear(config.hidden_size, self.all_head_size)
-        self.select = channel_selection(config.hidden_size)
+        self.select = channel_selection(self.all_head_size)
         self.out = Linear(config.hidden_size, config.hidden_size)
         self.attn_dropout = Dropout(config.transformer["attention_dropout_rate"])
         self.proj_dropout = Dropout(config.transformer["attention_dropout_rate"])
@@ -123,7 +123,7 @@ class Mlp(nn.Module):
         self.fc2 = Linear(config.transformer["mlp_dim"], config.hidden_size)
         self.act_fn = ACT2FN["gelu"]
         self.dropout = Dropout(config.transformer["dropout_rate"])
-        self.select = channel_selection(config.hidden_size)
+        self.select = channel_selection(config.transformer["mlp_dim"])
         self._init_weights()
 
     def _init_weights(self):
