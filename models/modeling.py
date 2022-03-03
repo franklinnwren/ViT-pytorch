@@ -6,7 +6,7 @@ from __future__ import print_function
 import copy
 import logging
 import math
-
+from einops import rearrange
 from os.path import join as pjoin
 
 import torch
@@ -34,6 +34,23 @@ FC_1 = "MlpBlock_3/Dense_1"
 ATTENTION_NORM = "LayerNorm_0"
 MLP_NORM = "LayerNorm_2"
 
+class channel_selection(nn.Module):
+    def __init__(self, num_channels):
+        """
+        Initialize the `indexes` with all one vector with the length same as the number of channels.
+        During pruning, the places in `indexes` which correpond to the channels to be pruned will be set to 0.
+        """
+        super(channel_selection, self).__init__()
+        self.indexes = nn.Parameter(torch.ones(num_channels))
+
+    def forward(self, input_tensor):
+        """
+        Parameter
+        ---------
+        input_tensor: (B, num_patches + 1, dim). 
+        """
+        output = input_tensor.mul(self.indexes)
+        return output
 
 def np2th(weights, conv=False):
     """Possibly convert HWIO to OIHW."""
@@ -60,7 +77,7 @@ class Attention(nn.Module):
         self.query = Linear(config.hidden_size, self.all_head_size)
         self.key = Linear(config.hidden_size, self.all_head_size)
         self.value = Linear(config.hidden_size, self.all_head_size)
-
+        self.select = channel_selection(config.hidden_size)
         self.out = Linear(config.hidden_size, config.hidden_size)
         self.attn_dropout = Dropout(config.transformer["attention_dropout_rate"])
         self.proj_dropout = Dropout(config.transformer["attention_dropout_rate"])
@@ -76,7 +93,10 @@ class Attention(nn.Module):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
-
+        mixed_query_layer = self.select(mixed_query_layer)
+        mixed_key_layer = self.select(mixed_key_layer)
+        mixed_value_layer = self.select(mixed_value_layer)
+        
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
@@ -103,7 +123,7 @@ class Mlp(nn.Module):
         self.fc2 = Linear(config.transformer["mlp_dim"], config.hidden_size)
         self.act_fn = ACT2FN["gelu"]
         self.dropout = Dropout(config.transformer["dropout_rate"])
-
+        self.select = channel_selection(config.hidden_size)
         self._init_weights()
 
     def _init_weights(self):
@@ -116,6 +136,7 @@ class Mlp(nn.Module):
         x = self.fc1(x)
         x = self.act_fn(x)
         x = self.dropout(x)
+        x = self.select(x)
         x = self.fc2(x)
         x = self.dropout(x)
         return x
